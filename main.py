@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 
 # Configura le variabili per GitHub
-GITHUB_REPO = "nome-utente/nome-repo"
+GITHUB_REPO = "itsmbro/HomeSweetHome"
 GITHUB_FILE_PATH = "data.json"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
