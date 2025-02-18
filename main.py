@@ -50,14 +50,16 @@ if st.button("Aggiungi"):
     if new_key and new_value:
         data[new_key] = new_value
         save_data(data)
-        st.experimental_rerun()
+        st.rerun()
+
 
 # Rimuovere voce
 remove_key = st.selectbox("Seleziona una voce da rimuovere:", options=[""] + list(data.keys()))
 if st.button("Rimuovi") and remove_key:
     del data[remove_key]
     save_data(data)
-    st.experimental_rerun()
+    st.rerun()
+
 
 # Mostra le voci e i valori
 if data:
