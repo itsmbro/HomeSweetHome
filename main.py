@@ -1,73 +1,87 @@
 import streamlit as st
 import json
 import requests
-import pandas as pd
+import base64
 import plotly.express as px
 
-# Configura le variabili per GitHub
-GITHUB_REPO = "itsmbro/HomeSweetHome"
-GITHUB_FILE_PATH = "data.json"
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+# Configurazione GitHub
+GITHUB_USER = "itsmbro"
+GITHUB_REPO = "HomeSweetHome"
+GITHUB_BRANCH = "main"
+GITHUB_FILE_PATH = "dati.json"
 
-# Funzione per caricare il JSON da GitHub
-def load_data():
-    url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{GITHUB_FILE_PATH}"
+def load_budget_data():
+    url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_FILE_PATH}"
     response = requests.get(url)
+    
     if response.status_code == 200:
         return response.json()
-    return {}
+    else:
+        budget_data = {}
+        save_budget_data(budget_data)
+        return budget_data
 
-# Funzione per salvare il JSON su GitHub
-def save_data(data):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+def save_budget_data(budget_data):
+    url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
     headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
+        "Authorization": f"token {st.secrets['GITHUB_TOKEN']}",
         "Accept": "application/vnd.github.v3+json"
     }
+
     response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        sha = response.json()["sha"]
-    else:
-        sha = None
-    
-    new_data = json.dumps(data, indent=4)
-    payload = {
-        "message": "Aggiornamento dati",
-        "content": new_data.encode("utf-8").decode("latin1"),
-        "sha": sha
+    sha = response.json().get("sha") if response.status_code == 200 else None
+
+    json_data = json.dumps(budget_data, ensure_ascii=False, indent=4)
+    json_base64 = base64.b64encode(json_data.encode()).decode()
+
+    data = {
+        "message": "Aggiornamento budget_data.json",
+        "content": json_base64,
+        "branch": GITHUB_BRANCH
     }
-    requests.put(url, headers=headers, json=payload)
+    
+    if sha:
+        data["sha"] = sha  
 
-# Carica i dati iniziali
-data = load_data()
+    response = requests.put(url, headers=headers, json=data)
+    if response.status_code not in [200, 201]:
+        st.error(f"Errore aggiornamento GitHub: {response.json()}")
 
-st.title("💰 Budget Tracker")
+# Carica il budget dal file JSON
+budget_data = load_budget_data()
 
-# Input per nuova voce
-new_key = st.text_input("Nome della voce:")
-new_value = st.number_input("Valore (€):", min_value=0.0, step=0.01)
-if st.button("Aggiungi"):
+st.title("💰 Gestione Budget")
+
+# Input per aggiungere nuove voci
+col1, col2 = st.columns(2)
+with col1:
+    new_key = st.text_input("Nome voce di spesa")
+with col2:
+    new_value = st.number_input("Importo (€)", min_value=0.0, format="%.2f")
+
+if st.button("Aggiungi/Modifica voce"):
     if new_key and new_value:
-        data[new_key] = new_value
-        save_data(data)
+        budget_data[new_key] = new_value
+        save_budget_data(budget_data)
         st.rerun()
+    else:
+        st.warning("Inserisci sia il nome della voce che l'importo!")
 
-
-# Rimuovere voce
-remove_key = st.selectbox("Seleziona una voce da rimuovere:", options=[""] + list(data.keys()))
-if st.button("Rimuovi") and remove_key:
-    del data[remove_key]
-    save_data(data)
+# Rimuovere una voce
+remove_key = st.selectbox("Seleziona una voce da rimuovere", list(budget_data.keys()), index=0) if budget_data else None
+if remove_key and st.button("Rimuovi voce"):
+    del budget_data[remove_key]
+    save_budget_data(budget_data)
     st.rerun()
 
+# Mostra il budget aggiornato
+data_items = list(budget_data.items())
+if data_items:
+    df = {"Voce": [x[0] for x in data_items], "Importo (€)": [x[1] for x in data_items]}
+    st.table(df)
 
-# Mostra le voci e i valori
-if data:
-    df = pd.DataFrame(list(data.items()), columns=["Voce", "Valore (€)"])
-    st.write(df)
-    
     # Grafico a torta
-    fig = px.pie(df, names="Voce", values="Valore (€)", title="Distribuzione Spese")
+    fig = px.pie(values=df["Importo (€)"], names=df["Voce"], title="Distribuzione Spese")
     st.plotly_chart(fig)
 else:
-    st.write("Nessuna voce aggiunta.")
+    st.info("Nessuna voce di spesa presente.")
